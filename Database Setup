@@ -1,0 +1,25 @@
+from pymongo import MongoClient
+from os import getenv
+
+client = MongoClient(getenv("MONGO_URI"))
+db = client['sms_config']
+
+import mysql.connector
+from os import getenv
+
+def get_mysql_connection():
+    return mysql.connector.connect(
+        host=getenv("MYSQL_HOST"),
+        user=getenv("MYSQL_USER"),
+        password=getenv("MYSQL_PASSWORD"),
+        database=getenv("MYSQL_DATABASE")
+    )
+
+CREATE TABLE metrics (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    country VARCHAR(5),
+    sms_sent INT,
+    success_rate FLOAT,
+    errors INT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
