@@ -1,0 +1,55 @@
+npx create-react-app sms-dashboard
+cd sms-dashboard
+npm install axios chart.js jwt-decode
+
+
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Dashboard from './components/Dashboard';
+import ProgramControl from './components/ProgramControl';
+import CountryOperatorManagement from './components/CountryOperatorManagement';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/control" element={<ProgramControl />} />
+        <Route path="/manage" element={<CountryOperatorManagement />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+
+import React, { useEffect, useState } from 'react';
+import axios from '../services/api';
+import { Chart } from 'react-chartjs-2';
+
+function Dashboard() {
+  const [metrics, setMetrics] = useState([]);
+
+  useEffect(() => {
+    axios.get('/metrics?country=US')
+      .then(response => setMetrics(response.data))
+      .catch(error => console.error(error));
+  }, []);
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <Chart
+        type="line"
+        data={{
+          labels: metrics.map(m => m.timestamp),
+          datasets: [
+            { label: 'SMS Sent', data: metrics.map(m => m.sms_sent), borderColor: 'blue' }
+          ]
+        }}
+      />
+    </div>
+  );
+}
+
+export default Dashboard;
