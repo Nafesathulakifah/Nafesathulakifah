@@ -1,0 +1,103 @@
+# Create a virtual environment and install dependencies
+python3 -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn pymongo mysql-connector-python pyjwt python-telegram-bot
+
+SECRET_KEY="your_secret_key"
+MONGO_URI="mongodb://localhost:27017"
+MYSQL_HOST="localhost"
+MYSQL_USER="root"
+MYSQL_PASSWORD="password"
+MYSQL_DATABASE="sms_metrics"
+TELEGRAM_TOKEN="your_telegram_bot_token"
+TELEGRAM_CHAT_ID="your_telegram_chat_id"
+
+from fastapi import FastAPI, Depends, HTTPException
+from auth import get_current_user
+from services.session_management import start_session, stop_session, restart_session
+from services.metrics import get_metrics, rate_limit_check
+from services.notifications import notify_telegram
+
+app = FastAPI()
+
+@app.get("/metrics")
+async def read_metrics(country: str, user: str = Depends(get_current_user)):
+    return get_metrics(country)
+
+@app.post("/sessions/start")
+async def start_program(country: str, operator: str, user: str = Depends(get_current_user)):
+    rate_limit_check(country)  # Ensures 10 SMS per minute
+    return start_session(country, operator)
+
+@app.post("/sessions/stop")
+async def stop_program(country: str, operator: str, user: str = Depends(get_current_user)):
+    return stop_session(country, operator)
+
+@app.post("/sessions/restart")
+async def restart_program(country: str, operator: str, user: str = Depends(get_current_user)):
+    return restart_session(country, operator)
+
+@app.post("/notify")
+async def alert_telegram(message: str):
+    return notify_telegram(message)
+import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime, timedelta
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+SECRET_KEY = "your_secret_key"
+
+def create_jwt(data: dict, expires_delta: timedelta = timedelta(hours=1)):
+    to_encode = data.copy()
+    to_encode.update({"exp": datetime.utcnow() + expires_delta})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+import subprocess
+
+def start_session(country: str, operator: str):
+    session_name = f"program_{country}_{operator}"
+    subprocess.run(["screen", "-dmS", session_name, "your_program_command"])
+    return {"status": "started", "session": session_name}
+
+def stop_session(country: str, operator: str):
+    session_name = f"program_{country}_{operator}"
+    subprocess.run(["screen", "-S", session_name, "-X", "quit"])
+    return {"status": "stopped", "session": session_name}
+
+def restart_session(country: str, operator: str):
+    stop_session(country, operator)
+    return start_session(country, operator)
+
+import mysql.connector
+from database.mysql import get_mysql_connection
+
+def get_metrics(country: str):
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM metrics WHERE country=%s", (country,))
+    metrics = cursor.fetchall()
+    conn.close()
+    return metrics
+
+def rate_limit_check(country: str):
+    # Simple rate-limiting logic
+    pass  # Implement rate-limiting logic for SMS
+import telegram
+from os import getenv
+
+bot = telegram.Bot(token=getenv("TELEGRAM_TOKEN"))
+chat_id = getenv("TELEGRAM_CHAT_ID")
+
+def notify_telegram(message: str):
+    bot.send_message(chat_id=chat_id, text=message)
+    return {"status": "message sent"}
